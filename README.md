@@ -3,7 +3,7 @@
 
 ### 目的：检测到人脸框
 
- ![result1.jpg](https://github.com/liyaguo6/face_detect/result1.jpg)
+ ![result1.jpg](D:\face_detect-master\result1.jpg)
 
 ### 一、准备数据
 
