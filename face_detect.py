@@ -76,7 +76,7 @@ def rect_merge(r1, r2, mergeThresh):
 
 def generateBoundingBox(featureMap, scale):
     '''
-    把经历国卷积池华后的特征图的坐标（x,y）转换为原始图的坐标，和人脸框大小也转换
+    把经历过卷积池化后的特征图的坐标（x,y）转换为原始图的坐标，和人脸框大小也转换
     :param featureMap: 特征图
     :param scale: 图片变换大小
     :return: 人类框位置，大小，和概率
@@ -86,7 +86,7 @@ def generateBoundingBox(featureMap, scale):
     cellSize = 227
     # 227 x 227 cell, stride=32
     for (x, y), prob in np.ndenumerate(featureMap):
-        if (prob >= 0.85):
+        if (prob >= 0.95):
             # print ('probably:',prob)
             boundingBox.append(
                 [float(stride * y) / scale, float(x * stride) / scale, float(stride * y + cellSize - 1) / scale,
@@ -189,6 +189,7 @@ def face_detection(imgFile):
 
     for scale in scales:
         # resize image
+        # 图片原始维度为H×W，resize后变为W×H
         scale_img = cv2.resize(img, (int(img.shape[0] * scale), int(img.shape[1] * scale)))
         # 临时保存尺寸变换后的图片
         cv2.imwrite('./save_test/scale_img.jpg', scale_img)
@@ -200,13 +201,15 @@ def face_detection(imgFile):
         im = caffe.io.load_image('./save_test/scale_img.jpg')
 
         # 动态修改网络，该成全卷积，可以输入不同尺寸的图片数据
-        net_full_conv.blobs['data'].reshape(1, 3, scale_img.shape[1], scale_img.shape[0])
+        ###设定图片的shape格式(1,3,227,227)，大小由deploy 文件指定  # python读取的图片文件格式为H×W×K，需转化为K×H×W
+        ##上面这句，  第一参数：图片数量    第二个参数 ：通道数    第三个参数：图片高度         第四个参数：图片宽度
+        net_full_conv.blobs['data'].reshape(1, 3, scale_img.shape[1], scale_img.shape[0]) # 将输入图片格式转化为合适格式
         transformer = caffe.io.Transformer({'data': net_full_conv.blobs['data'].data.shape})
         transformer.set_mean('data',
                              np.load(r'D:\caffe-master\python\caffe\imagenet\ilsvrc_2012_mean.npy').mean(1).mean(1))
-        transformer.set_transpose('data', (2, 0, 1))  #RGB -->BGR
-        transformer.set_channel_swap('data', (2, 1, 0))
-        transformer.set_raw_scale('data', 255.0)
+        transformer.set_transpose('data', (2, 0, 1))  ##改变维度的顺序，由原始图片(227,227,3)变为(3,227,227)
+        transformer.set_channel_swap('data', (2, 1, 0))  # #交换通道，将图片由RGB变为BGR（caffe中图片是BGR格式，而原始格式是RGB，所以要转化）
+        transformer.set_raw_scale('data', 255.0)  # python中将图片存储为[0, 1]，而caffe中将图片存储为[0, 255]，所以需要一个转换    # 缩放到【0，255】之间
 
         # 前向传播，获取特征图的概率矩阵
         out = net_full_conv.forward_all(data=np.asarray([transformer.preprocess('data', im)]))
@@ -231,26 +234,23 @@ def face_detection(imgFile):
     # nms
     print('total_boxes:',total_boxes)
     boxes_nms = np.array(total_boxes)
-    true_boxes = nms_average(boxes_nms, 1, 0.2)
+    true_boxes = nms_average(boxes_nms, 4, 0.2)
     if not true_boxes == []:
         (x1, y1, x2, y2) = true_boxes[0][:-1]
         cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255),3)
         # win = cv2.namedWindow('test win', flags=0)
 
         # cv2.imshow('test win', img)
-        result_image = './result.jpg'
+        result_image = './result1.jpg'
         cv2.imwrite(result_image, img, [int(cv2.IMWRITE_PNG_COMPRESSION), 9])
-
         img = Image.open(result_image)
         plt.figure("Image")  # 图像窗口名称
         plt.imshow(img)
-        plt.axis('on')
-        #  关掉坐标轴为
-        plt.title('result')
-        #  图像题目
+        plt.axis('on')#  关掉坐标轴为
+        plt.title('result')#  图像题目
         plt.show()
 
 if __name__ == "__main__":
-    imgFile = r'D:\face_detect-master\luojiangtao.jpg'
+    imgFile = r'D:\face_detect-master\2.jpg'
 
     face_detection(imgFile)
